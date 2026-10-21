@@ -93,7 +93,7 @@ function pendingSummary(visible, window, upto) {
 /**
  * Builds the full prompt for the next AI turn.
  *  history: the chat's messages up to the point being generated (oldest first)
- *  kind: reply | continue | impersonate
+ *  kind: reply | continue | impersonate | advance (roleplay: the player passes; move the scene on)
  *  guidance: one-off direction for this reply ("have the guard recognise me")
  */
 export async function buildPrompt(chat, { history, kind = 'reply', guidance = '', dryRun = false }) {
@@ -181,7 +181,11 @@ export async function buildPrompt(chat, { history, kind = 'reply', guidance = ''
     tail.push('[Continue your last reply exactly where it stopped, mid-sentence if needed. Output only the continuation — do not repeat or summarize what is already written.]');
   } else {
     if (post) tail.push(post);
-    if (rp) tail.push(`[Write the next reply. Stay consistent with the map. Do not write ${names.user}'s actions, dialogue or thoughts.]`);
+    if (kind === 'advance') {
+      tail.push(`[${names.user} has nothing to do right now and lets the story move on. Keep ${names.user} doing what they were already doing, and move time and the scene forward just enough to reach the next moment they can react to — don't skip far ahead. Don't write ${names.user}'s actions, dialogue or thoughts. End on something they can respond to.]`);
+    } else if (rp) {
+      tail.push(`[Write the next reply. Stay consistent with the map. Don't write ${names.user}'s actions, dialogue or thoughts. Stop at the next moment ${names.user} would react.]`);
+    }
   }
   if (guidance.trim()) tail.push(`[Direction for this reply only: ${M(guidance.trim())}]`);
   const tailMsgs = tail.length ? [{ role: 'system', content: tail.join('\n') }] : [];

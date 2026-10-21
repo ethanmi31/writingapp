@@ -142,7 +142,8 @@ export default function ChatView({ chatId, settings, models, notify, onChanged, 
         return notify(e.message, 'error');
       }
     }
-    await generate('reply');
+    // in roleplay, sending nothing means "I've nothing to do — move the story on"
+    await generate(!content && chat.mode === 'roleplay' ? 'advance' : 'reply');
   };
 
   const stop = () => api.post(`/chats/${chatId}/stop`).catch(() => {});
@@ -280,6 +281,7 @@ export default function ChatView({ chatId, settings, models, notify, onChanged, 
             <div className="composer-tools">
               <button className="ghost small" disabled={busy || last?.role !== 'assistant'} onClick={() => generate('regenerate')} title="New version of the last reply (old versions stay as swipes)">↻ Regenerate</button>
               <button className="ghost small" disabled={busy || last?.role !== 'assistant'} onClick={() => generate('continue')} title="Make the last reply longer">⏩ Continue</button>
+              {rp && <button className="ghost small" disabled={busy} onClick={() => generate('advance')} title="You have nothing to do right now: the narrator moves time and the scene forward to the next moment you can react to">⏭ Move the story on</button>}
               {rp && <button className="ghost small" disabled={busy} onClick={() => generate('impersonate')} title="Let the AI draft your next move (you can edit it before sending)">🎭 Write for me</button>}
               <span className="sep" />
               <button className={`ghost small ${showGuidance ? 'active' : ''}`} onClick={() => setShowGuidance(!showGuidance)} title="Steer the next reply">🧭 Direct</button>
@@ -309,7 +311,7 @@ export default function ChatView({ chatId, settings, models, notify, onChanged, 
               {live ? (
                 <button className="danger" onClick={stop} title="Stop (keeps what was written so far)">■ Stop</button>
               ) : (
-                <button className="primary" disabled={tracking} onClick={() => send()} title={draft.trim() ? 'Send' : 'Let the AI take the next turn'}>
+                <button className="primary" disabled={tracking} onClick={() => send()} title={draft.trim() ? 'Send' : rp ? 'Move the story on' : 'Let the AI take the next turn'}>
                   {draft.trim() ? 'Send' : '➤'}
                 </button>
               )}

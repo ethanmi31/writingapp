@@ -51,7 +51,8 @@ const running = new Map(); // chatId -> AbortController (one generation per chat
 
 /**
  * Generates the next AI turn and streams it.
- *  kind: reply (new message) | regenerate (new swipe of the last AI message) | continue (extend it) | impersonate (draft the user's turn)
+ *  kind: reply (new message) | advance (new message that moves the scene on) | regenerate (new swipe of the last AI message)
+ *        | continue (extend it) | impersonate (draft the user's turn)
  * events: meta, token, reasoning, done, tracker
  */
 export async function generate(chatId, { kind = 'reply', guidance = '', signal, emit = () => {} }) {
@@ -111,7 +112,7 @@ export async function generate(chatId, { kind = 'reply', guidance = '', signal, 
 
     const meta = { ...built.meta, model: result.model || model, finish: stopped ? 'stopped' : result.finish };
     let message;
-    if (kind === 'reply') {
+    if (kind === 'reply' || kind === 'advance') {
       const id = Number(
         db.prepare("INSERT INTO messages (chat_id, role, content, swipes, swipe_idx, swipe_meta, reasoning, meta) VALUES (?, 'assistant', ?, ?, 0, ?, ?, ?)").run(
           chat.id, text.trim(), JSON.stringify([text.trim()]), JSON.stringify([{ meta, reasoning: result.reasoning }]), result.reasoning || '', JSON.stringify(meta)

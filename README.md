@@ -46,7 +46,9 @@ A narrator plays the world and every character except you.
   - **Both the narrator and the map keeper always get the full map**, so the narrator knows where everyone is and who can see whom.
 - **The scene simplifier:** after every reply, a plain-words card. *Right now* (what's happening, in 1-3 short sentences), where you are, the time, who's around (only people you know of and should know of), what someone is waiting on you to answer, what you need to know, what you're wearing and carrying and your condition, and a few things you could do next (click to put one in the message box). Adjustable text size. The 💡 button also puts a one-line **In short** under every narrator message.
 - **Rewinds correctly:** regenerating, swiping between versions, deleting messages and branching all bring the map and the scene card back to how they were at that point.
+- **⏭ Move the story on** (or sending an empty message, or typing "continue"): when you have nothing to do, the narrator keeps your character doing what they were doing and moves time forward just enough to reach the next moment you can react to.
 - **Write for me** (impersonate) drafts your next move for you to edit. **🎲 d20** rolls into your message.
+- **The narrator's default rules:** it never writes your character's actions, words or thoughts; it plays scenes line by line and fights exchange by exchange, stopping wherever you'd react; "I swing at her" lets the world decide the outcome, while "I dodge it" is final.
 
 ## Lorebooks (World Info)
 
