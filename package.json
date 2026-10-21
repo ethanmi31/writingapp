@@ -1,0 +1,29 @@
+{
+  "name": "inkwell",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Unrestricted front-end for OpenRouter models, built for long-form writing and roleplay: lorebooks, document memory, a live map and a scene simplifier.",
+  "type": "module",
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "dev": "node --disable-warning=ExperimentalWarning server/index.js --dev",
+    "build": "vite build",
+    "start": "node --disable-warning=ExperimentalWarning server/index.js",
+    "test": "node --disable-warning=ExperimentalWarning --test test/*.test.js"
+  },
+  "dependencies": {
+    "express": "^5.3.0",
+    "jsonrepair": "^3.15.0",
+    "mammoth": "^1.13.0",
+    "multer": "^2.4.0",
+    "pdf-parse": "^2.4.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "vite": "^8.3.4"
+  }
+}
