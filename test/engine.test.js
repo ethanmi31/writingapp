@@ -8,7 +8,7 @@ process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'inkwell-test-'));
 const { db } = await import('../server/db.js');
 const { keyMatcher, activateLore, insertEntries, chatEntries, parseSillyTavernLorebook, exportSillyTavern } = await import('../server/lorebook.js');
 const { addDocument, searchChunks, extractTerms } = await import('../server/documents.js');
-const { applyOps, emptyMap, mapText, playerEntity } = await import('../server/tracker.js');
+const { applyOps, emptyMap, mapText, playerEntity, perceptionBrief } = await import('../server/tracker.js');
 const { macros } = await import('../server/context.js');
 
 const entry = (o) => ({ id: o.id, lorebook_id: 1, title: o.title || `e${o.id}`, keys: JSON.stringify(o.keys || []), secondary_keys: JSON.stringify(o.secondary || []), logic: o.logic || 'and_any',
@@ -109,6 +109,35 @@ test('map ops: nesting, movement, layout without overlap', () => {
   assert.ok(!player.includes('Assassin') && !player.includes('hooded figure'));
   applyOps(map, [{ op: 'location', name: 'Bar', parent: 'Bar' }], 'Alex'); // can't be its own parent
   assert.notEqual(bar.parent, bar.id);
+});
+
+test('perception check: who is here, nearby, far, and what they know', () => {
+  const map = emptyMap();
+  applyOps(map, [
+    { op: 'location', name: 'Inn', type: 'building' },
+    { op: 'location', name: 'Bar', type: 'room', parent: 'Inn' },
+    { op: 'location', name: 'Kitchen', type: 'room', parent: 'Inn' },
+    { op: 'location', name: 'Docks', type: 'outdoor' },
+    { op: 'connect', a: 'Bar', b: 'Kitchen', kind: 'door' },
+    { op: 'entity', name: 'Mira', location: 'Bar', doing: 'pouring ale' },
+    { op: 'entity', name: 'Cook', location: 'Kitchen' },
+    { op: 'entity', name: 'Oriel', location: 'Docks' },
+    { op: 'entity', name: 'Spy', location: 'Bar', hidden: true },
+    { op: 'entity', name: 'Mug', kind: 'object', location: 'Bar' },
+    { op: 'player', location: 'Bar' }
+  ], 'Alex');
+  applyOps(map, [{ op: 'entity', name: 'Mira', learned: ["Alex's name", 'Alex is a courier'] }, { op: 'entity', name: 'Mira', learned: ["Alex's name"] }], 'Alex');
+  assert.deepEqual(map.entities.find((e) => e.name === 'Mira').knows, ["Alex's name", 'Alex is a courier']);
+  const b = perceptionBrief(map, 'Alex');
+  const line = (start) => b.split('\n').find((l) => l.startsWith(start)) || '';
+  assert.match(line('- In the same place'), /Mira — pouring ale/);
+  assert.match(line('- In the same place'), /Spy.*HIDDEN/);
+  assert.match(line('- Nearby'), /Cook \(Kitchen\)/);
+  assert.match(line('- Out of sight'), /Oriel \(Docks\)/);
+  assert.match(line('- Things here'), /Mug/);
+  assert.match(b, /Mira: Alex's name; Alex is a courier/);
+  assert.match(b, /Cook: nothing beyond/);
+  assert.equal(perceptionBrief(emptyMap(), 'Alex'), '');
 });
 
 test('macros', () => {

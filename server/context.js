@@ -1,7 +1,7 @@
 import { db, estimateTokens, getSettings, parseJSON } from './db.js';
 import { activateLore, chatEntries, loadTimers } from './lorebook.js';
 import { chatDocumentIds, retrieveForChat } from './documents.js';
-import { loadMap, mapText, playerEntity, ancestry } from './tracker.js';
+import { loadMap, mapText, playerEntity, ancestry, perceptionBrief } from './tracker.js';
 import { httpError } from './openrouter.js';
 
 const join = (parts) => parts.filter((p) => p && String(p).trim()).join('\n\n');
@@ -143,7 +143,7 @@ export async function buildPrompt(chat, { history, kind = 'reply', guidance = ''
   // --- dynamic state: map (roleplay) or manuscript (writing)
   const mapBlock = rp && mapText(map, names.user);
   const stateBlock = rp
-    ? mapBlock && `MAP & SCENE STATE (authoritative — keep positions, outfits, items and who-can-see-whom consistent with it):\n${mapBlock}`
+    ? mapBlock && `MAP & SCENE STATE (authoritative — keep positions, outfits, items and who-can-see-whom consistent with it; this is the narrator's knowledge, not the characters'):\n${mapBlock}`
     : ms.text && `MANUSCRIPT${ms.cut ? ` — the latest part (the whole draft is ${words(chat.manuscript).toLocaleString()} words)` : ` (${words(chat.manuscript).toLocaleString()} words)`}:\n${ms.text}`;
 
   // --- documents: only what the lorebooks don't already cover
@@ -160,7 +160,7 @@ export async function buildPrompt(chat, { history, kind = 'reply', guidance = ''
     budget: opt.docBudget ?? s.docBudget
   });
 
-  const loreBefore = lore.before && `LORE:\n${M(lore.before)}`;
+  const loreBefore = lore.before && `LORE (the narrator's background knowledge — characters only know what they would plausibly know):\n${M(lore.before)}`;
   const loreAfter = lore.after && `MORE LORE:\n${M(lore.after)}`;
   const head = [
     { role: 'system', content: systemPrompt },
@@ -188,6 +188,9 @@ export async function buildPrompt(chat, { history, kind = 'reply', guidance = ''
     }
   }
   if (guidance.trim()) tail.push(`[Direction for this reply only: ${M(guidance.trim())}]`);
+  // roleplay: who can perceive what, right where the model is about to write
+  const brief = rp && kind !== 'impersonate' ? perceptionBrief(map, names.user) : '';
+  if (brief) tail.unshift(brief);
   const tailMsgs = tail.length ? [{ role: 'system', content: tail.join('\n') }] : [];
 
   // --- history: as many recent messages as fit; older ones live on in the rolling summary

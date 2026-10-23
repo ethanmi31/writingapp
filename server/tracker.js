@@ -129,7 +129,7 @@ export function applyOps(map, ops, playerName) {
           const isNew = !ent;
           if (isNew) {
             if (!str(op.name)) break;
-            ent = { id: nextId('e'), kind: 'npc', name: str(op.name, 80), location: null, known: true, hidden: false, alias: '', doing: '', outfit: '', attitude: '', notes: '' };
+            ent = { id: nextId('e'), kind: 'npc', name: str(op.name, 80), location: null, known: true, hidden: false, alias: '', doing: '', outfit: '', attitude: '', notes: '', knows: [] };
             map.entities.push(ent);
           }
           if (op.rename && str(op.rename) && ent.kind !== 'player') ent.name = str(op.rename, 80);
@@ -144,6 +144,13 @@ export function applyOps(map, ops, playerName) {
           if (op.known != null) ent.known = !!op.known;
           if (op.hidden != null) ent.hidden = !!op.hidden;
           if (Array.isArray(op.inventory)) ent.inventory = op.inventory.map((i) => str(i, 80)).filter(Boolean).slice(0, 30);
+          // what this character knows about the player: "knows" replaces the list, "learned" adds to it
+          const facts = (v) => (Array.isArray(v) ? v : []).map((f) => str(f, 140)).filter(Boolean);
+          if (ent.kind !== 'player') {
+            if (Array.isArray(op.knows)) ent.knows = facts(op.knows);
+            if (Array.isArray(op.learned)) ent.knows = [...new Set([...(ent.knows || []), ...facts(op.learned)])];
+            if (ent.knows?.length > 25) ent.knows = ent.knows.slice(-25);
+          }
           log.push(`${isNew ? 'added' : 'updated'} ${ent.name}`);
           break;
         }
@@ -292,12 +299,51 @@ export function mapText(map, playerName = 'You', view = 'full') {
         e.inventory?.length && `carrying: ${e.inventory.join(', ')}`,
         e.condition && `condition: ${e.condition}`,
         e.attitude && `attitude to ${playerName}: ${e.attitude}`,
+        view === 'full' && e.kind !== 'player' && e.kind !== 'object' && `knows about ${playerName}: ${e.knows?.length ? e.knows.join('; ') : 'nothing yet'}`,
         view === 'full' && e.notes && `notes: ${e.notes}`,
         view === 'full' && e.hidden && `HIDDEN — ${playerName} can't perceive them right now`
       ].filter(Boolean);
       lines.push(`- ${e.kind === 'player' ? `${playerName} (the player)` : shown(e)} — ${where}${bits.length ? `; ${bits.join('; ')}` : ''}`);
     }
   }
+  return lines.join('\n');
+}
+
+/**
+ * A short, computed "who can perceive what" check for the end of the narrator's prompt: models lose track of
+ * positions and let characters know things they couldn't, and a plain list right before they write fixes most of it.
+ */
+export function perceptionBrief(map, playerName = 'You') {
+  const player = map.entities.find((e) => e.kind === 'player');
+  const loc = player?.location && map.locations.find((l) => l.id === player.location);
+  if (!loc) return '';
+  const nameOf = (id) => map.locations.find((l) => l.id === id)?.name || '?';
+  const exits = map.connections.filter((c) => c.a === loc.id || c.b === loc.id).map((c) => ({ id: c.a === loc.id ? c.b : c.a, kind: c.kind }));
+  const nearIds = new Set([...exits.map((x) => x.id), ...map.locations.filter((l) => l.parent === loc.id).map((l) => l.id), ...(loc.parent ? [loc.parent] : [])]);
+  const people = map.entities.filter((e) => e.kind === 'npc' || e.kind === 'creature');
+  const here = people.filter((e) => e.location === loc.id);
+  const near = people.filter((e) => e.location && nearIds.has(e.location));
+  const far = people.filter((e) => !here.includes(e) && !near.includes(e));
+  const things = map.entities.filter((e) => e.kind === 'object' && e.location === loc.id);
+  const label = (e) => (e.known === false && e.alias ? `${e.name} (${playerName} only knows them as "${e.alias}")` : e.name);
+  const where = ancestry(map, loc.id).map((l) => l.name).reverse().join(', in ');
+
+  const lines = [`SCENE CHECK — where everyone is right now (from the map; trust this over anything earlier):`];
+  lines.push(`- ${playerName} is in ${where}.${player.hidden ? ` ${playerName} is HIDDEN: nobody has noticed them unless the story says so.` : ''}${exits.length ? ` Ways out: ${exits.map((x) => `${nameOf(x.id)}${x.kind ? ` (${x.kind})` : ''}`).join(', ')}.` : ''}`);
+  lines.push(
+    here.length
+      ? `- In the same place (can see and hear ${playerName}${player.hidden ? ' if they notice them' : ''}): ${here.map((e) => `${label(e)}${e.doing ? ` — ${e.doing}` : ''}${e.hidden ? ` [HIDDEN: ${playerName} can't see or hear them]` : ''}`).join('; ')}`
+      : `- Nobody else is in the same place as ${playerName}.`
+  );
+  if (things.length) lines.push(`- Things here: ${things.map((t) => `${t.name}${t.doing ? ` (${t.doing})` : ''}`).join(', ')}`);
+  if (near.length) lines.push(`- Nearby but NOT here (can't see ${playerName}; at most hear loud noises): ${near.map((e) => `${label(e)} (${nameOf(e.location)})`).join('; ')}`);
+  if (far.length) lines.push(`- Out of sight and earshot (can't perceive anything happening here): ${far.slice(0, 12).map((e) => `${e.name}${e.location ? ` (${nameOf(e.location)})` : ''}`).join('; ')}${far.length > 12 ? ` and ${far.length - 12} more` : ''}`);
+  const relevant = [...here, ...near];
+  if (relevant.length) {
+    lines.push(`- What they know about ${playerName} (anything not listed, they DON'T know — not ${playerName}'s name, past, secrets, plans or belongings):`);
+    for (const e of relevant) lines.push(`  · ${e.name}: ${e.knows?.length ? e.knows.join('; ') : 'nothing beyond what they can see right now'}`);
+  }
+  lines.push(`Characters react only to what they can perceive right now and say only what they know and would actually bother saying. Nobody explains, points out or describes things for the player's benefit.`);
   return lines.join('\n');
 }
 
@@ -309,8 +355,8 @@ Read the latest exchange and return ONLY the changes, as JSON: {"ops":[...]}. Op
 - {"op":"location","name":"...","type":"region|area|building|floor|room|outdoor|landmark|vehicle","parent":"<containing place or null>","x":0-100,"y":0-100,"w":5-60,"h":5-60,"desc":"short physical description"}  (creates or updates; add "rename" to rename)
 - {"op":"remove_location","name":"..."}
 - {"op":"connect","a":"...","b":"...","kind":"door|hallway|stairs|road|path|window|gate|..."}  /  {"op":"disconnect","a":"...","b":"..."}
-- {"op":"entity","name":"...","kind":"npc|creature|object","location":"<most specific place>","doing":"...","outfit":"...","attitude":"how they feel about ${user}","known":true|false,"alias":"what ${user} calls them if they don't know the name","hidden":true|false,"notes":"..."}  (creates or updates)
-- {"op":"player","location":"...","doing":"...","outfit":"what ${user} is wearing","inventory":["full list of what ${user} carries"],"condition":"injuries, tiredness, mood, effects"}
+- {"op":"entity","name":"...","kind":"npc|creature|object","location":"<most specific place>","doing":"...","outfit":"...","attitude":"how they feel about ${user}","known":true|false,"alias":"what ${user} calls them if they don't know the name","hidden":true|false,"learned":["new facts this character just learned about ${user}"],"notes":"..."}  (creates or updates)
+- {"op":"player","location":"...","doing":"...","outfit":"what ${user} is wearing","inventory":["full list of what ${user} carries"],"condition":"injuries, tiredness, mood, effects","hidden":true|false}
 - {"op":"remove_entity","name":"..."}   (dead bodies and dropped items stay as entities; remove only what is truly gone)
 - {"op":"world","time":"...","weather":"..."}
 
@@ -320,6 +366,7 @@ Rules:
 - Always keep ${user}'s location current. Move characters when they move. A character who leaves with no destination goes to the parent place or is removed only if they've left the story.
 - "known": false when ${user} hasn't learned who that person is (then set "alias"). "hidden": true when ${user} can't currently see or hear them (hiding, invisible, behind a wall listening).
 - Track outfits, items and conditions when they change (put on, taken off, picked up, given away, wounded, drunk...).
+- KNOWLEDGE: each character's "knows" list is everything they know about ${user}. When a character sees, hears or is told something about ${user} on-screen (their name, face, job, what they said, did or carry, a secret), add it with "learned", in a few words ("${user}'s name", "${user} is looking for the Grey Heron", "saw ${user} pocket the key"). Only what that character actually witnessed or was told — someone in another room or not paying attention learns nothing. For ${user} set "hidden": true while they're hiding or unseen.
 - Use existing names exactly as they appear in the map. If nothing changed, return {"ops":[]}.`;
 
 const SIMPLIFIER = (user) => `You write the SCENE SIMPLIFIER card for the player of an interactive story. The player gets overwhelmed or confused by long, detailed prose and needs the essentials at a glance, in very plain, short, concrete words (simple vocabulary, no metaphors, no flowery language).
@@ -398,6 +445,7 @@ function compactMap(map) {
       const o = { name: e.name, kind: e.kind, location: name(e.location) };
       for (const k of ['alias', 'doing', 'outfit', 'attitude', 'condition', 'notes']) if (e[k]) o[k] = e[k];
       if (e.inventory?.length) o.inventory = e.inventory;
+      if (e.knows?.length) o.knows = e.knows;
       if (e.known === false) o.known = false;
       if (e.hidden) o.hidden = true;
       return o;

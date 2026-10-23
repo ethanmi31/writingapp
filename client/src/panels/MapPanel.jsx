@@ -379,7 +379,7 @@ export default function MapPanel({ chat, setChat, notify, tracking, onAction }) 
 function Detail({ sel, map, user, save, close, onAction, zoomInto, childrenOf }) {
   const isLoc = sel.type === 'loc';
   const item = isLoc ? map.locations.find((l) => l.id === sel.id) : map.entities.find((e) => e.id === sel.id);
-  const [d, setD] = useState(() => (item ? { ...item, inventory: (item.inventory || []).join(', ') } : null));
+  const [d, setD] = useState(() => (item ? { ...item, inventory: (item.inventory || []).join(', '), knowsText: (item.knows || []).join('; ') } : null));
   const [editing, setEditing] = useState(false);
   if (!item || !d) return null;
   const set = (k) => (e) => setD({ ...d, [k]: e.target.type === 'checkbox' ? e.target.checked : e.target.value });
@@ -390,6 +390,8 @@ function Detail({ sel, map, user, save, close, onAction, zoomInto, childrenOf })
     const i = list.findIndex((x) => x.id === item.id);
     const clean = { ...d };
     if (!isLoc) clean.inventory = d.inventory.split(',').map((s) => s.trim()).filter(Boolean);
+    if (!isLoc) clean.knows = d.knowsText.split(';').map((s) => s.trim()).filter(Boolean);
+    delete clean.knowsText;
     if (isLoc) clean.parent = d.parent || null;
     else clean.location = d.location || null;
     list[i] = clean;
@@ -447,6 +449,7 @@ function Detail({ sel, map, user, save, close, onAction, zoomInto, childrenOf })
               {item.inventory?.length > 0 && <div>Carrying: {item.inventory.join(', ')}</div>}
               {item.condition && <div>Condition: {item.condition}</div>}
               {item.attitude && <div>Attitude: {item.attitude}</div>}
+              {item.kind !== 'player' && item.kind !== 'object' && <div>Knows about you: {item.knows?.length ? item.knows.join('; ') : <span className="muted">nothing yet</span>}</div>}
               {item.notes && <div className="muted">Notes: {item.notes}</div>}
               {item.kind !== 'player' && item.kind !== 'object' && (
                 <div className="row wrap" style={{ marginTop: 8 }}>
@@ -504,6 +507,7 @@ function Detail({ sel, map, user, save, close, onAction, zoomInto, childrenOf })
                     <label className="toggle"><input type="checkbox" checked={!!d.hidden} onChange={set('hidden')} /> Hidden from {user}</label>
                   </div>
                   {!d.known && <Field label={`What ${user} calls them`}><input value={d.alias || ''} onChange={set('alias')} placeholder="the hooded stranger" /></Field>}
+                  <Field label={`What they know about ${user} (separate with ;)`}><input value={d.knowsText} onChange={set('knowsText')} placeholder={`${user}'s name; ${user} is a courier`} /></Field>
                   <Field label="Secret notes (narrator only)"><input value={d.notes || ''} onChange={set('notes')} /></Field>
                 </>
               )}
